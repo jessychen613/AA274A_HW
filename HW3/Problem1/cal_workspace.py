@@ -27,9 +27,6 @@ def main():
     cc.loadImages(cal_img_path, name, n_corners, square_length, n_disp_img, display_flag)
 
     u_meas, v_meas = cc.getMeasuredPixImageCoord()
-
-    print("u_meas, v_meas",u_meas, v_meas)
-
     X, Y = cc.genCornerCoordinates(u_meas, v_meas)
 
     H = []
