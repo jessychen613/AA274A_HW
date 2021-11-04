@@ -87,7 +87,7 @@ class CameraCalibrator:
         Xlist.append(X.flatten())
         Ylist.append(Y.flatten())
 
-        corner_coordinates = (Xlist*n_chessboards, Ylist*n_chessboards)
+        corner_coordinates = (Xlist*self.n_chessboards, Ylist*self.n_chessboards)
 
         ########## Code ends here ##########
         return corner_coordinates
@@ -109,15 +109,22 @@ class CameraCalibrator:
         ########## Code starts here ##########
 
         M = np.stack([X,Y,np.ones_like(X)])
-        firstrow = np.stack([M.T,np.zeros_like(M).T,-u_meas*(M.T)])
-        secondrow = np.stack([np.zeros_like(M).T,M.T,-v_meas*(M.T)])
+#        print("M.shape,u_meas.shape",M.shape,u_meas.shape)
+#        print("M.T,np.zero_like.T,-u_meas shape",M.T.shape,np.zeros_like(M).T.shape,u_meas[:,None]*(M.T).shape)
+        firstrow = np.hstack([M.T,np.zeros_like(M).T,-u_meas[:,None]*(M.T)])
+        secondrow = np.hstack([np.zeros_like(M).T,M.T,-v_meas[:,None]*(M.T)])
 
+#        print("firstrow.shape,secondrow.shape",firstrow.shape,secondrow.shape)
         L=np.vstack((firstrow,secondrow))
 
-        print("L.shape,L",L.shape,L)
+#        print("L.shape,L",L.shape,L)
 
-        U, s, Vh = linalg.svd(L)
-        H = Vh[-1,:].reshape((3,3))
+        U, s, Vh = np.linalg.svd(L)
+        smallestind = np.argmin(s)
+#        print("U,s,Vh,U.shape,s.shape,Vh.shape",U,s,Vh,U.shape,s.shape,Vh.shape)
+#        print("s,Vh",s,Vh,s.shape,Vh.shape)
+        H = Vh[smallestind].reshape((3,3))
+#        print("H,H.shape",H,H.shape)
 
         ########## Code ends here ##########
         return H
@@ -140,15 +147,22 @@ class CameraCalibrator:
             hi = H[:,i-1]
             hj = H[:,j-1]
             vij = [hi[0]*hj[0],hi[0]*hj[1]+hi[1]*hj[0],hi[1]*hj[1],hi[2]*hj[0]+hi[0]*hj[2],hi[2]*hj[1]+hi[1]*hj[2],hi[2]*hj[2]]
-            return vij.T
+            return np.array(vij).T
+#        print("H[0].shape,len(H)",H[0].shape,len(H))
 
+        V = np.zeros((0,6))
         for i in range(len(H)):
-            Vi=np.vstack(get_vij(H[i],1,2).T,(get_vij(H[i],1,1)-get_vij(H[i],2,2)).T)
-            V=np.vstack(Vi)
+            Vi=np.vstack((get_vij(H[i],1,2).T,(get_vij(H[i],1,1)-get_vij(H[i],2,2)).T))
+#            print("vi.shape",Vi.shape)
+            V=np.vstack((V,Vi))
+               
+#        print("V.shape",V.shape)
 
-        U, s, Vh = np.svp(V)
-        B11,B12,B22,B13,B23,B33=Vh[-1,:]
-
+        U, s, Vh = np.linalg.svd(V)
+        smallestind = np.argmin(s)
+        B11,B12,B22,B13,B23,B33=Vh[smallestind]
+        
+ #       print("B11,B12,B22,B13,B23,B33",B11,B12,B22,B13,B23,B33)
         v0=(B12*B13-B11*B23)/(B11*B22-B12*B12)
         lamba=B33-(B13*B13+v0*(B12*B13-B11*B23))/B11
         alpha=np.sqrt(lamba/B11)
@@ -157,7 +171,8 @@ class CameraCalibrator:
         u0=gamma*v0/beta-B13*np.square(alpha)/gamma
 
         A=np.array([[alpha,gamma,u0],[0,beta,v0],[0,0,1]])
-
+        
+#        print("Vh.shape,A",Vh.shape,A)
         ########## Code ends here ##########
         return A
 
@@ -171,17 +186,25 @@ class CameraCalibrator:
             t: the translation vector
         '''
         ########## Code starts here ##########
-
+        
+#        print("H.shape,A.shape",H.shape,A.shape)
         Ainv = np.linalg.inv(A)
-        lamba = 1/np.linalg.inv.norm(Ainv,H[:,0])
-        r1 = lamba*np.dot(Ainv,H[:,0])
-        r2 = lamba*np.dot(Ainv,H[:,1])
-        r3 = np.cross(r1,r2)
-        t = lamba*np.dot(Ainv,H[:,2])
+#        print("Ainv.shape,H[:,0].shape",Ainv.shape,H[:,0].shape)
+        lamba = 1/np.linalg.norm(np.dot(Ainv,H[:,0]))
+        r1 = lamba*np.matmul(Ainv,H[:,0])
+        r2 = lamba*np.matmul(Ainv,H[:,1])
 
-        Q = np.stack(r1,r2,r3).T
-        U, s, Vh = np.svp(Q)
-        R = np.dot(U,vh)
+#        print("r1,r2,dot",np.dot(Ainv,H[:,0]),np.dot(Ainv,H[:,1]))
+#        print("r1,r2,matmul",np.matmul(Ainv,H[:,0]),np.matmul(Ainv,H[:,1]))
+
+        r3 = np.cross(r1,r2)
+        t = lamba*np.matmul(Ainv,H[:,2])
+        
+#        print("r1,r2,r3",r1.shape,r2.shape,r3.shape)
+        Q = np.hstack((np.hstack((r1.reshape(3,1),r2.reshape(3,1))),r3.reshape(3,1))).T
+#        print("Q,Q.shape",Q.shape)
+        U, s, Vh = np.linalg.svd(Q)
+        R = np.matmul(U,Vh)
 
         ########## Code ends here ##########
         return R, t
@@ -197,10 +220,13 @@ class CameraCalibrator:
 
         '''
         ########## Code starts here ##########
-
+        
+#        print("R.shape,t.shape",R.shape,t.shape)
         PW = np.array([X,Y,Z,np.ones_like(X)])
-        RT = np.stack(R,t)
-        PC = np.dot(RT,Mhat)
+#        print("PW.shape",PW.shape)
+        RT = np.hstack((R,t.reshape(3,1)))
+#        print("RT",RT.shape)
+        PC = np.matmul(RT,PW)
         PC = PC/PC[2]
 
         x,y,_=PC
@@ -218,13 +244,15 @@ class CameraCalibrator:
             u, v: the coordinates in the ideal pixel image plane
         '''
         ########## Code starts here ##########
+#        print("Pix,R.shape,t.shape,A.shape",R.shape,t.shape,A.shape)
         PW = np.array([X,Y,Z,np.ones_like(X)])
-        RT = np.stack(R,t)
-        Ph=np.dot(A,np.dot(RT,Mhat))
+#        print("PW.shape",PW.shape)
+        RT = np.hstack((R,t.reshape(3,1)))
+        Ph=np.matmul(A,np.matmul(RT,PW))
 
-        ph=ph/ph[2]
+        Ph=Ph/Ph[2]
 
-        u,v,_=ph
+        u,v,_=Ph
 
         ########## Code ends here ##########
         return u, v
