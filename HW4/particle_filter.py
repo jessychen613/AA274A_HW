@@ -116,22 +116,34 @@ class ParticleFilter(object):
         #       without for loops. You may find np.linspace(), np.cumsum(), and
         #       np.searchsorted() useful. This results in a ~10x speedup.
 
-        i=0
-        c = ws[0]
+#        i=0
+#        c = ws[0]
 #        print("xs.shape, ws.shape",xs.shape, ws.shape)
 #        print("xs",xs)
 #        print("ws",ws)
         
-        for m in range(self.M):
+        u_test = np.sum(ws)*(r+np.linspace(0,self.M-1,num=100)/self.M)
+#        print("u_test",u_test)
+
+        ws_test = ws.cumsum(axis=0)
+#        print("ws_test",ws_test)
+
+        index = np.searchsorted(ws_test, u_test)
+#        print("index",index,index.shape)
+
+        self.xs = xs[index]
+        self.ws = ws[index]
+
+#        for m in range(self.M):
 #            print("ws[m]",ws[m])
-            u = np.sum(ws)*(r+m/self.M)
-            while c < u:
-                i = i+1
-                c = c+ws[i]
+#            u = np.sum(ws)*(r+m/self.M)
+#            while c < u:
+#                i = i+1
+#                c = c+ws[i]
 
 #            print("i",i)
-            self.xs[m] = xs[i]
-            self.ws[m] = ws[i]
+#            self.xs[m] = xs[i]
+#            self.ws[m] = ws[i]
 
         ########## Code ends here ##########
 
@@ -202,12 +214,66 @@ class MonteCarloLocalization(ParticleFilter):
 #        print("us.shape, us",us.shape, us)
 #        print("self.xs.shape, self.M",self.xs.shape,self.M)
 
-        g=np.zeros((self.M,3))
 
-        for i in range(self.M):
-            g[i,:] = tb.compute_dynamics(self.xs[i,:], us[i], dt, compute_jacobians=False)
+        x_t_1,y_t_1,th_t_1 = self.xs.T
+#        print("x_t_1,y_t_1,th_t_1",x_t_1.shape,y_t_1.shape,th_t_1.shape)
 
-#        print("g",g)
+        v_t, om_t = us.T
+#        print("v_t, om_t",v_t.shape, om_t.shape)
+
+        index1 = np.where(abs(om_t)<tb.EPSILON_OMEGA)
+        index2 = np.where(abs(om_t)>=tb.EPSILON_OMEGA)
+
+ #       print("index1.shape,index2.shape",len(index1[0]),len(index2[0]),index1,index2)
+
+        x_t = np.zeros_like(x_t_1)
+        y_t = np.zeros_like(y_t_1)
+        th_t = th_t_1 + om_t*dt
+#        print("th_t.shape",th_t.shape)
+
+        x_t[index1] = x_t_1[index1] + v_t[index1]*np.cos(th_t_1[index1])*dt
+        y_t[index1] = y_t_1[index1] + v_t[index1]*np.sin(th_t_1[index1])*dt
+
+#        print("x_t.shape,y_t.shape",x_t.shape,y_t.shape)
+
+        x_t[index2] = x_t_1[index2] + v_t[index2]/om_t[index2]*(np.sin(th_t[index2])-np.sin(th_t_1[index2]))
+        y_t[index2] = y_t_1[index2] - v_t[index2]/om_t[index2]*(np.cos(th_t[index2])-np.cos(th_t_1[index2]))
+
+#        print("after index2")
+        g = np.vstack((x_t,y_t,th_t)).T
+#        print("g_test.shape, g_test",g_test.shape, g_test)
+
+#    x_t_1 = xvec[0]
+#    y_t_1 = xvec[1]
+#    th_t_1 = xvec[2]
+
+#    v_t = u[0]
+#    om_t = u[1]
+
+#    th_t = th_t_1 + om_t*dt
+
+#    if abs(om_t)<EPSILON_OMEGA:
+#        x_t = x_t_1 + v_t*np.cos(th_t_1)*dt
+#        y_t = y_t_1 + v_t*np.sin(th_t_1)*dt
+
+#        g = np.array([x_t,y_t,th_t])
+
+
+#    else:
+ #       x_t = x_t_1 + v_t/om_t*(np.sin(th_t)-np.sin(th_t_1))
+#        y_t = y_t_1 - v_t/om_t*(np.cos(th_t)-np.cos(th_t_1))
+
+#        g = np.array([x_t,y_t,th_t])
+    
+
+
+
+#        g=np.zeros((self.M,3))
+
+#        for i in range(self.M):
+#            g[i,:] = tb.compute_dynamics(self.xs[i,:], us[i], dt, compute_jacobians=False)
+
+#        print("g.shape, g",g.shape, g)
         ########## Code ends here ##########
 
         return g
@@ -268,7 +334,7 @@ class MonteCarloLocalization(ParticleFilter):
  #       print("z.shape,z",z.shape,z)
 
         Q = scipy.linalg.block_diag(*Q_raw)
-        print("Q.shape,Q",Q.shape,Q)
+#        print("Q.shape,Q",Q.shape,Q)
 
         ########## Code ends here ##########
 
@@ -319,26 +385,60 @@ class MonteCarloLocalization(ParticleFilter):
         hs = self.compute_predicted_measurements()
         numi=z_raw.shape[1]
         numj=hs.shape[2]
-        vs = np.zeros((self.M,numi,2))
-        V = np.zeros((self.M,numi,numj,2))
-        d = np.zeros((numi,numj))
+#        vs = np.zeros((self.M,numi,2))
+#        V = np.zeros((self.M,numi,numj,2))
+#        d = np.zeros((numi,numj))
 #        print("numi,numj",numi,numj)
 #        print("z_raw.shape,hs.shape,z_raw,hs",z_raw.shape,hs.shape,z_raw,hs)
-        for m in range(self.M):
-            for i in range(numi):
-                for j in range(numj):
+
+#        print("z_raw[None,0,:,None]",z_raw[None,0,:,None].shape)
+#        print("hs[:,0,:,None,:]",hs[:,0,None,:].shape)
+#        print("angle_diff(z_raw[None,0,:,None], hs[:,0,None,:]",angle_diff(z_raw[None,0,:,None], hs[:,0,None,:]).shape)
+#        print("z_raw[None,1,:,None] - hs[:,1,None,:]",(z_raw[None,1,:,None] - hs[:,1,None,:]).shape)
+
+        V_test = np.array([angle_diff(z_raw[None,0,:,None], hs[:,0,None,:]),(z_raw[None,1,:,None] - hs[:,1,None,:])]).transpose(1,3,2,0)
+#        print("V_test.shape",V_test.shape)
+
+        V_test = V_test[:,:,:,:,None]
+#        print("V_test[:,:,:,:,None].shape",V_test.shape)
+
+        Q = np.linalg.inv(Q_raw)[None,None,:,:,:]
+#        print("Q.shape",Q.shape)
+
+        d_test = np.matmul(np.matmul(V_test.transpose(0,1,2,4,3),Q),V_test)
+#        print("d_test.shape",d_test.shape)
+#        print("d_test.reshape(self.M,numj,numi)",d_test.reshape(self.M,numj,numi).shape)
+
+        d_test = d_test.reshape(self.M,numj,numi).transpose(0,2,1)
+#        print("d_test.shape",d_test.shape)
+        m_index = np.argmin(d_test,axis=2)[:, None, :, None]
+#        print("m_index,",m_index.shape,m_index)
+
+#        print("V_test.reshape(self.M,numj,numi,2).transpose(0,2,1,3)",V_test.reshape(self.M,numj,numi,2).transpose(0,2,1,3).shape)
+#        vs_test = V_test.reshape(self.M,numj,numi,2).transpose(0,2,1,3)[m_index]
+        vs_test = np.take_along_axis(V_test.reshape(self.M,numj,numi,2),m_index,axis=1)
+        vs = vs_test.reshape(self.M,numi,2)
+
+#        print("vs_test.shape,vs_test",vs_test.shape,vs_test)
+
+#        for m in range(self.M):
+#            for i in range(numi):
+#                for j in range(numj):
 #                    print("z_raw[0,i], hs[0,j],z_raw[1,i],hs[0,j]",z_raw[0,i], hs[0,j],z_raw[1,i],hs[0,j])
-                    V[m,i,j,0] = angle_diff(z_raw[0,i], hs[m,0,j])
-                    V[m,i,j,1] = z_raw[1,i] - hs[m,1,j]
+#                    V[m,i,j,0] = angle_diff(z_raw[0,i], hs[m,0,j])
+#                    V[m,i,j,1] = z_raw[1,i] - hs[m,1,j]
 #                    print("V[m,i,j]",V[m,i,j])
 
-                    d[i,j]=np.dot(np.dot(V[m,i,j].T,np.linalg.inv(Q_raw[i,:,:])),V[m,i,j])
+#                    d[i,j]=np.dot(np.dot(V[m,i,j].T,np.linalg.inv(Q_raw[i,:,:])),V[m,i,j])
+#                    print("np.dot(V[m,i,j].T,np.linalg.inv(Q_raw[i,:,:]))",np.dot(V[m,i,j].T,np.linalg.inv(Q_raw[i,:,:])).shape)
+#                    print(d[i,j])
 #                    print("d[i,j]",d[i,j])
 
-                min_index=np.argmin(d[i,:])
-                vs[m,i,:] = V[m,i,min_index,:]
+#                min_index=np.argmin(d[i,:])
+#                print("min_index",min_index)
+#                vs[m,i,:] = V[m,i,min_index,:]
 
-#        print("vs.shape",vs.shape)
+#        print("vs.shape,vs",vs.shape,vs)
         ########## Code ends here ##########
 
         # Reshape [M x I x 2] array to [M x 2I]
@@ -368,15 +468,33 @@ class MonteCarloLocalization(ParticleFilter):
         # Hint: For the faster solution, it does not call tb.transform_line_to_scanner_frame()
         #       or tb.normalize_line_parameters(), but reimplement these steps vectorized.
 #        print("self.map_lines.shape,self.M",self.map_lines.shape,self.M)
+
         hs = np.zeros((self.M,2,self.map_lines.shape[1]))
-        for m in range(self.M):
-            for j in range(self.map_lines.shape[1]):
+        x_base, y_base, th_base = self.tf_base_to_camera
 
-                h,Hx = tb.transform_line_to_scanner_frame(self.map_lines[:,j], self.xs[m,:], self.tf_base_to_camera)
+        x_cam,y_cam,th_cam = np.vstack(([self.xs[:,0]+x_base*np.cos(self.xs[:,2])-y_base*np.sin(self.xs[:,2])],[self.xs[:,1] + x_base*np.sin(self.xs[:,2]) + y_base*np.cos(self.xs[:,2])],[self.xs[:,2] + th_base]))
+        alpha, r = self.map_lines
+
+        alpha_cam = alpha[None,:] - th_cam[:,None]
+        r_cam = r[None,:]-np.dot(x_cam.reshape(self.M,1),np.cos(alpha).reshape(1,self.map_lines.shape[1]))-np.dot(y_cam.reshape(100,1),np.sin(alpha).reshape(1,self.map_lines.shape[1]))
+
+        #normalize_line_parameters
+        index = np.where(r_cam < 0)
+        alpha_cam[index] += np.pi
+        r_cam[index] *= -1
+        alpha_cam = (alpha_cam + np.pi) % (2*np.pi) - np.pi
+
+        hs = np.array([alpha_cam,r_cam]).transpose(1,0,2)
+
+#        for m in range(self.M):
+#            for j in range(self.map_lines.shape[1]):
+
+#                h,Hx = tb.transform_line_to_scanner_frame(self.map_lines[:,j], self.xs[m,:], self.tf_base_to_camera)
             
-                h, Hx = tb.normalize_line_parameters(h, Hx)
-                hs[m,:,j] = h
+#                h, Hx = tb.normalize_line_parameters(h, Hx)
+#                hs[m,:,j] = h
 
+#        print("hs",hs)
         ########## Code ends here ##########
 
         return hs
